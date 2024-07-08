@@ -5,7 +5,6 @@ class TriggerClient:
         self.host = host
         self.port = port
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.connect((self.host, self.port))
         print(f"Connected to trigger listener at {self.host}:{self.port}")
 
     def send_trigger(self):
