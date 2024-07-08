@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[9]:
-
-
 import os
 import sys
 import numpy as np
@@ -18,7 +15,6 @@ from real_client import RealSenseClient
 
 from typing import Dict, List
 from pydantic import dataclasses, validator
-
 from generic import AllowArbitraryTypes
 
 from transformers import OwlViTProcessor, OwlViTForObjectDetection
@@ -59,38 +55,6 @@ class EnvState:
                 raise ValueError("objects must have shape (4,)")
         return v
 
-    
-class RealSenseClient:
-    def __init__(self):
-        self.pipeline = rs.pipeline()
-        self.config = rs.config()
-        self.config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-        self.config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-        self.pipeline.start(self.config)
-        self.profile = self.pipeline.get_active_profile()
-        self.intr = self.profile.get_stream(rs.stream.color).as_video_stream_profile().get_intrinsics()
-
-    
-    @property
-    def color_intr(self):
-        # 반환되는 내부 파라미터는 numpy 배열로 변환되어야 합니다.
-        return np.array([[self.intr.fx, 0, self.intr.ppx],
-                         [0, self.intr.fy, self.intr.ppy],
-                         [0, 0, 1]])
-
-    def get_camera_data(self):
-        frames = self.pipeline.wait_for_frames()
-        color_frame = frames.get_color_frame()
-        depth_frame = frames.get_depth_frame()
-        
-        if not color_frame or not depth_frame:
-            return None, None
-        
-        color_img = np.asanyarray(color_frame.get_data())
-        depth_img = np.asanyarray(depth_frame.get_data())
-#         TODO: real_client.py > buffer로 받는게 이 메소드에서의 pipline.wait_for_frames() 로 받아서 color_frame, depth_frame 으로 나눠주는 거까지의 형태가 동일한가? 
-        return color_img, depth_img
-
 
 class RealEnv():
     def __init__(
@@ -120,7 +84,7 @@ class RealEnv():
         self.timestep = 0
     
     def get_obs(self, save=False) -> EnvState:
-        color_im, depth_im = self.bin_cam.get_camera_data()
+        depth_im, color_im = self.bin_cam.send_trigger()
         ws_color_im = color_im[WS_CROP_X[0]:WS_CROP_X[1], WS_CROP_Y[0]:WS_CROP_Y[1]]
         ws_depth_im = depth_im[WS_CROP_X[0]:WS_CROP_X[1], WS_CROP_Y[0]:WS_CROP_Y[1]]
 
@@ -226,7 +190,7 @@ class RealEnv():
         pick_pix = pick_pix[0] + WS_CROP_Y[0], pick_pix[1] + WS_CROP_X[0]
         
 
-        bin_cam_pose = np.loadtxt('/home/piai/test_ai/cam2ur_pose.txt')
+        bin_cam_pose = np.loadtxt('/home/piai/ai_project/real_cam_total/cam2ur_pose.txt')
     
         bin_cam_depth_scale = 0.001 # RealSense depth scale is typically 0.001
 
@@ -246,7 +210,11 @@ class RealEnv():
 
         
 def main():
-    bin_cam = RealSenseClient()
+    bin_cam = RealSenseClient(
+        "192.168.0.6",
+        1024,
+        fielt_bg=True
+    )
 #     bin_cam = RealSenseClient(ip = "141.223.140.15", port=1024)
 
     env = RealEnv(
@@ -276,12 +244,6 @@ if __name__ == "__main__":
     main()
 
 
-
-
-
-
-
-# In[ ]:
 
 
 
