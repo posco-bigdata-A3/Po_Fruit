@@ -24,6 +24,22 @@ class RealSenseServer:
         pipeline_profile = pipeline.start(cfg)
         return pipeline
 
+    def get_intrinsics(self):
+        profile = self.pipeline.get_active_profile()
+        color_profile = rs.video_stream_profile(profile.get_stream(rs.stream.color))
+        intr = color_profile.get_intrinsics()
+        intrinsics = {
+            'width': intr.width,
+            'height': intr.height,
+            'ppx': intr.ppx,
+            'ppy': intr.ppy,
+            'fx': intr.fx,
+            'fy': intr.fy,
+            'model': intr.model,
+            'coeffs': intr.coeffs
+        }
+        return intrinsics
+
     def get_frames(self):
         frames = self.pipeline.wait_for_frames()
         depth_frame = frames.get_depth_frame()
@@ -34,24 +50,30 @@ class RealSenseServer:
         return depth_image, color_image, timestamp
 
     def handle_client(self, client_socket):
-        while True:
-            try:
+        try:
+            while True:
                 request = client_socket.recv(1024)
                 if not request:
                     break
                 print("Received request from client")
                 with self.lock:
                     depth_image, color_image, timestamp = self.get_frames()
-                    data = pickle.dumps((depth_image, color_image))
-                    length = struct.pack('<I', len(data))
-                    ts = struct.pack('<d', timestamp)
-                    print(f"Sending frame of length {len(data)} with timestamp {timestamp}")
-                    client_socket.sendall(length + ts + data)
-                    print(f"Frame sent")
-            except Exception as e:
-                print(f"Error: {e}")
-                break
-        client_socket.close()
+                    intrinsics = self.get_intrinsics()  # Intrinsics 정보를 매번 가져오도록 변경
+                    data = {
+                        'depth_image': depth_image,
+                        'color_image': color_image,
+                        'timestamp': timestamp,
+                        'intrinsics': intrinsics
+                    }
+                    packed_data = pickle.dumps(data)
+                    length = struct.pack('<I', len(packed_data))
+                    print(f"Sending data of length {len(packed_data)} with timestamp {timestamp}")
+                    client_socket.sendall(length + packed_data)
+                    print(f"Data sent")
+        except Exception as e:
+            print(f"Error: {e}")
+        finally:
+            client_socket.close()
 
     def start(self):
         while True:
