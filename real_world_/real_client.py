@@ -19,13 +19,15 @@ class RealSenseClient:
         self.frame_length = None
         self.timestamp = None
         self.socket = None
+        self.intr = None
         self.connect_to_server()
-
+    
     @property
     def color_intr(self):
-        # 반환되는 내부 파라미터는 numpy 배열로 변환되어야 합니다.
-        return np.array([[self.intr.fx, 0, self.intr.ppx],
-                         [0, self.intr.fy, self.intr.ppy],
+        if self.intr is None:
+            return None
+        return np.array([[self.intr['fx'], 0, self.intr['ppx']],
+                         [0, self.intr['fy'], self.intr['ppy']],
                          [0, 0, 1]])
 
     def connect_to_server(self):
@@ -51,18 +53,18 @@ class RealSenseClient:
                 print("Sending trigger...")
                 self.socket.sendall(b"TRIGGER")
                 
-                print("Waiting for frame length...")
-                header = self.socket.recv(12)
-                if len(header) < 12:
+                print("Waiting for data length...")
+                header = self.socket.recv(4)
+                if len(header) < 4:
                     print("Failed to receive complete header")
                     return None, None
                 
-                self.frame_length, self.timestamp = struct.unpack('<Id', header)
+                self.frame_length = struct.unpack('<I', header)[0]
                 self.remainingBytes = self.frame_length
-                print(f"Receiving frame of length {self.frame_length} with timestamp {self.timestamp}")
+                print(f"Receiving data of length {self.frame_length}")
             
             except Exception as e:
-                #print(f"Erprint(f"Connection failed: {e}")ror receiving frame length: {e}")
+                print(f"Error receiving data length: {e}")
                 return None, None
         
         try:
@@ -76,10 +78,15 @@ class RealSenseClient:
                 self.remainingBytes -= len(data)
             
             if len(self.buffer) == self.frame_length:
-                print("Received complete frame")
-                depth_img, color_img = pickle.loads(self.buffer)
+                print("Received complete data")
+                received_data = pickle.loads(self.buffer)
                 self.buffer = b""
                 self.remainingBytes = 0
+
+                depth_img = received_data['depth_image']
+                color_img = received_data['color_image']
+                self.timestamp = received_data['timestamp']
+                self.intr = received_data['intrinsics']
 
                 # Apply depth offset
                 depth_img = depth_img.astype(np.float64) * 0.973
@@ -87,7 +94,11 @@ class RealSenseClient:
 
                 # Apply background filter if enabled
                 if fielt_bg is None:
-                    fielt_bg =5 hours ago self.fielt_bg
+                    fielt_bg = self.fielt_bg
+                if fielt_bg:
+                    mask = (cv2.cvtColor(color_img, cv2.COLOR_RGB2HSV)[:, :, 2] > 150)
+                    color_img = color_img * mask[:, :, np.newaxis] + (1 - mask[:, :, np.newaxis]) * np.array([90, 89, 89])
+                    color_img = color_img.astype(np.uint8)
 
                 return depth_img, color_img
             else:
@@ -98,6 +109,7 @@ class RealSenseClient:
 
     def send_trigger(self):
         return self.get_camera_data()
+
 
 # 클라이언트를 실행하는 별도의 스크립트
 # if __name__ == '__main__':
