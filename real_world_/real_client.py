@@ -6,36 +6,50 @@ import pickle
 import struct
 import numpy as np
 import cv2
-import time
 import threading
 from PIL import Image
-from trigger import TriggerClient
-
-WS_PC = [0, 180, 0, 300]
-
-def get_workspace_crop(img):
-    retval = img[WS_PC[0]:WS_PC[1], WS_PC[2]:WS_PC[3], ...]
-    return retval
 
 class RealSenseClient:
     def __init__(self, host, port, fielt_bg=False):
         self.host = host
         self.port = port
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.connect((self.host, self.port))
         self.fielt_bg = fielt_bg
         self.buffer = b""
         self.remainingBytes = 0
         self.frame_length = None
         self.timestamp = None
-        self.event = threading.Event()
-        print(f"Connected to server at {self.host}:{self.port}")
+        self.socket = None
+        self.connect_to_server()
+
+    @property
+    def color_intr(self):
+        # 반환되는 내부 파라미터는 numpy 배열로 변환되어야 합니다.
+        return np.array([[self.intr.fx, 0, self.intr.ppx],
+                         [0, self.intr.fy, self.intr.ppy],
+                         [0, 0, 1]])
+
+    def connect_to_server(self):
+        if self.socket:
+            self.socket.close()
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            self.socket.connect((self.host, self.port))
+            print(f"Connected to server at {self.host}:{self.port}")
+        except ConnectionRefusedError as e:
+            print(f"Connection failed: {e}")
+            self.socket = None
 
     def get_camera_data(self, fielt_bg=None):
+        if not self.socket:
+            self.connect_to_server()
+            print("Connect Complete")
+            if not self.socket:
+                return None, None
+
         if self.remainingBytes == 0:
             try:
-                print("Sending request for frame...")
-                self.socket.sendall(b"REQUEST_FRAME")
+                print("Sending trigger...")
+                self.socket.sendall(b"TRIGGER")
                 
                 print("Waiting for frame length...")
                 header = self.socket.recv(12)
@@ -46,8 +60,9 @@ class RealSenseClient:
                 self.frame_length, self.timestamp = struct.unpack('<Id', header)
                 self.remainingBytes = self.frame_length
                 print(f"Receiving frame of length {self.frame_length} with timestamp {self.timestamp}")
+            
             except Exception as e:
-                print(f"Error receiving frame length: {e}")
+                #print(f"Erprint(f"Connection failed: {e}")ror receiving frame length: {e}")
                 return None, None
         
         try:
@@ -72,11 +87,7 @@ class RealSenseClient:
 
                 # Apply background filter if enabled
                 if fielt_bg is None:
-                    fielt_bg = self.fielt_bg
-                if fielt_bg:
-                    mask = (cv2.cvtColor(color_img, cv2.COLOR_RGB2HSV)[:, :, 2] > 150)
-                    color_img = color_img * mask[:, :, np.newaxis] + (1 - mask[:, :, np.newaxis]) * np.array([90, 89, 89])
-                    color_img = color_img.astype(np.uint8)
+                    fielt_bg =5 hours ago self.fielt_bg
 
                 return depth_img, color_img
             else:
@@ -85,76 +96,30 @@ class RealSenseClient:
             print(f"Error receiving frame data: {e}")
             return None, None
 
-    def wait_for_trigger(self):
-        self.event.wait()  # 이벤트가 설정될 때까지 대기
-        self.event.clear()  # 이벤트 상태를 초기화
+    def send_trigger(self):
         return self.get_camera_data()
 
-    def trigger(self):
-        self.event.set()  # 이벤트를 설정하여 대기 중인 스레드를 깨움
+# 클라이언트를 실행하는 별도의 스크립트
+# if __name__ == '__main__':
+#     #ip = "141.223.140.15"
+#     ip = '192.168.0.6'
+#     port = 1024
 
-def client_main(ip, port):
-    global realsense_client
-    realsense_client = RealSenseClient(ip, port, fielt_bg=True)
-    
-    counter = 0
-    limit = 10
-    sleep = 0.05
+#     # RealSenseClient 인스턴스 생성
+#     realsense_client = RealSenseClient(ip, port, fielt_bg=True)
 
-    all_rgbs = []
-    while counter < limit:
-        depth_img, color_img = realsense_client.wait_for_trigger()  # 한 번에 한 프레임만 요청
-        if depth_img is None or color_img is None:
-            print("Failed to get frames. Retrying...")
-            time.sleep(sleep)
-            continue
-        im = Image.fromarray(color_img)
-        
-        print("depth img shape: ", depth_img.shape)
-        print("color img shape: ", color_img.shape)
-        counter += 1
-        time.sleep(sleep)
-        print('Step counter at {}'.format(counter))
-        all_rgbs.append(color_img)
+#     while True:
+#         input("Press Enter to send trigger...")
+#         depth_img, color_img = realsense_client.send_trigger()
+#         if depth_img is not None and color_img is not None:
+#             print("Depth image shape:", depth_img.shape)
+#             print("Color image shape:", color_img.shape)
+#         else:
+#             print("Failed to receive images.")
 
-        fig, ax = plt.subplots(2, 2, figsize=(10, 5))  # 오타 수정
-        ax[0][0].imshow(color_img)
-        ax[0][1].imshow(depth_img, cmap='gray')
-        ax[1][0].imshow(get_workspace_crop(color_img))
-        ax[1][1].imshow(get_workspace_crop(depth_img), cmap='gray')
-        plt.show()
 
-    print("Program finished.")
-
-def trigger_listener(ip, port):
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(("0.0.0.0", port))
-    server_socket.listen(1)
-    print(f"Trigger listener started on {ip}:{port}")
-
-    conn, addr = server_socket.accept()
-    print(f"Accepted trigger connection from {addr}")
-
-    while True:
-        data = conn.recv(1024)
-        if data == b"TRIGGER":
-            realsense_client.trigger()
-            print("Received trigger")
-
-if __name__ == '__main__':
-    ip = "141.223.140.15"
-    port = 1024
-    trigger_port = 1025
-
-    # 별도의 스레드에서 클라이언트 실행
-    client_thread = threading.Thread(target=client_main, args=(ip, port))
-    client_thread.start()
-
-    # 별도의 스레드에서 트리거 리스너 실행
-    trigger_listener_thread = threading.Thread(target=trigger_listener, args=(ip, trigger_port))
-    trigger_listener_thread.start()
-
-    trigger_client = TriggerClient(ip, trigger_port)
-    while True:
-        input("Press Enter to send trigger...")
-        trigger_client.send_trigger()
+#    def color_intr(self):
+        # 반환되는 내부 파라미터는 numpy 배열로 변환되어야 합니다.
+#        return np.array([[self.intr.fx, 0, self.intr.ppx],
+#                         [0, self.intr.fy, self.intr.ppy],
+#                         [0, 0, 1]])
