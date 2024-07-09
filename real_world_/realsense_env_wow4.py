@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[7]:
-
-
 import os
 import sys
 import numpy as np
@@ -18,18 +15,16 @@ from real_client import RealSenseClient
 
 from typing import Dict, List
 from pydantic import dataclasses, validator
-
 from generic import AllowArbitraryTypes
 
 from transformers import OwlViTProcessor, OwlViTForObjectDetection
 import pyrealsense2 as rs
 
-WS_CROP_X = (0, 180)
-WS_CROP_Y = (0, 300)
+WS_CROP_X = (0, 800)
+WS_CROP_Y = (0, 800)
 
-WORKSPACE_SURFACE = -0.025
-BIN_TOP = 0.1
-tool_orientation = [2.22, -2.22, 0.0]
+WORKSPACE_SURFACE = 0.0
+
 
 @dataclasses.dataclass(config=AllowArbitraryTypes, frozen=True)
 class EnvState:
@@ -58,38 +53,6 @@ class EnvState:
             if v[obj].shape != (4,):
                 raise ValueError("objects must have shape (4,)")
         return v
-
-    
-class RealSenseClient:
-    def __init__(self):
-        self.pipeline = rs.pipeline()
-        self.config = rs.config()
-        self.config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-        self.config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-        self.pipeline.start(self.config)
-        self.profile = self.pipeline.get_active_profile()
-        self.intr = self.profile.get_stream(rs.stream.color).as_video_stream_profile().get_intrinsics()
-
-    
-    @property
-    def color_intr(self):
-        # 반환되는 내부 파라미터는 numpy 배열로 변환되어야 합니다.
-        return np.array([[self.intr.fx, 0, self.intr.ppx],
-                         [0, self.intr.fy, self.intr.ppy],
-                         [0, 0, 1]])
-
-    def get_camera_data(self):
-        frames = self.pipeline.wait_for_frames()
-        color_frame = frames.get_color_frame()
-        depth_frame = frames.get_depth_frame()
-        
-        if not color_frame or not depth_frame:
-            return None, None
-        
-        color_img = np.asanyarray(color_frame.get_data())
-        depth_img = np.asanyarray(depth_frame.get_data())
-
-        return color_img, depth_img
 
 
 class RealEnv():
@@ -120,10 +83,10 @@ class RealEnv():
         self.timestep = 0
     
     def get_obs(self, save=False) -> EnvState:
-        color_im, depth_im = self.bin_cam.get_camera_data()
+        depth_im, color_im = self.bin_cam.send_trigger()
         ws_color_im = color_im[WS_CROP_X[0]:WS_CROP_X[1], WS_CROP_Y[0]:WS_CROP_Y[1]]
         ws_depth_im = depth_im[WS_CROP_X[0]:WS_CROP_X[1], WS_CROP_Y[0]:WS_CROP_Y[1]]
-
+        plt.imshow(ws_color_im)
         image = Image.fromarray(ws_color_im)
         text = self.all_objects
 
@@ -172,8 +135,52 @@ class RealEnv():
         if save:
             fig.savefig(f"{self.output_name}/pred_{self.timestep}.png")
         plt.close(fig)
-   
+        
+    def describe_task_context(self):
+        raise NotImplementedError
+    
+    def chat_mode_prompt(self):
+        raise NotImplementedError
 
+    def get_action_prompt(self):
+        raise NotImplementedError
+    
+    def get_system_prompt(
+        self, 
+        mode="chat", 
+        obs = None, 
+        chat_history: List[Dict] = [], 
+        feedback_history: List[str] = [],
+        include_comm_prompt=True,
+    ):
+        context = self.describe_task_context()
+        
+        if mode == "chat":
+            comm_prompt = self.chat_mode_prompt()
+        else:
+            raise NotImplementedError
+        
+        history = ''
+        round_num = len(chat_history)
+        if len(chat_history) > 0:
+            history = f"[History]\n"
+            for i, response in enumerate(chat_history):
+                history += f"=== Round #{i}: === \n{response}\n"
+        
+        scene_desp = f"=== Round {round_num}: === \n" + (self.describe_scene(obs.objects) if obs is not None else "")
+        feedback_history = "\n".join(feedback_history)
+        if not include_comm_prompt:
+            system_prompt = f"{context}\n{history}\n{scene_desp}\n{feedback_history}"
+        else:
+            system_prompt = f"{context}\n{history}\n{scene_desp}\n{feedback_history}\n{comm_prompt}"
+        breakdown = dict(
+            task_context=context,
+            comm_prompt=comm_prompt,
+            scene_desp=scene_desp,
+            feedback_history=feedback_history,
+        )
+        return system_prompt, breakdown
+    
     def pick_and_place_primitive(self, obs, pick_obj):
         if pick_obj not in obs.objects:
             raise Exception(f"PICK: {pick_obj} not detected")
@@ -182,7 +189,7 @@ class RealEnv():
         pick_pix = pick_pix[0] + WS_CROP_Y[0], pick_pix[1] + WS_CROP_X[0]
         
 
-        bin_cam_pose = np.loadtxt('/home/piai/test_ai/cam2ur_pose.txt')
+        bin_cam_pose = np.loadtxt('/home/piai/ai_project/real_cam_total/cam2ur_pose.txt')
     
         bin_cam_depth_scale = 0.001 # RealSense depth scale is typically 0.001
 
@@ -196,7 +203,7 @@ class RealEnv():
 
         pick_pos = np.dot(bin_cam_pose, pick_point)
         pick_pos = pick_pos[0:3, 0]
-        pick_pos[2] = max(pick_pos[2], WORKSPACE_SURFACE)
+        pick_pos[1] = max(pick_pos[1], WORKSPACE_SURFACE)
 
 
         pick_box = obs.objects[pick_obj]
@@ -205,13 +212,12 @@ class RealEnv():
         pick_pos = np.append(pick_pos, pick_size)
             
         return pick_pos
-    
+
 class RoCo:
     def __init__(self, env: RealEnv):
         self.env = env
         self.dictionary = {}
         self.count = 0
-        
 
     def execute(self):
         obs = self.env.get_obs(True)
@@ -219,27 +225,40 @@ class RoCo:
         pick_obj = [*obs.objects.keys()]
         for one in pick_obj:
             robo_coordinates = self.env.pick_and_place_primitive(obs, pick_obj=one)
-            self.dictionary[one] = robo_coordinates
+            if robo_coordinates is not None:
+                self.dictionary[one] = robo_coordinates
         
         print('dictionary: ', self.dictionary.keys(), self.dictionary.values())
         return self.dictionary
-''''
+
+
+
+
 # RealEnv 객체 생성
-bin_cam = RealSenseClient()
+"""
+bin_cam = RealSenseClient(
+        "192.168.0.6",
+        1024,
+        fielt_bg=True
+    )
 env = RealEnv(
     bin_cam=bin_cam,
     task='Thinning green fruits',
-    all_objects=["monitor", "human", "keyboard", "mouse", "phone"],
-    task_objects=["human", "keyboard"]
+    all_objects=["round fruit_4", "round fruit_3", "round fruit_2", "round fruit_1", "ugly fruit"],
+    task_objects=["round fruit_4", "round fruit_3", "round fruit_2", "round fruit_1"]
 )
 
 # RoCo 객체 생성 및 실행
 roco = RoCo(env)
 result = roco.execute()
-'''
+
+"""
 
 
-# In[ ]:
+
+
+
+
 
 
 
