@@ -1,25 +1,18 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[28]:
-
-
 import socket
 import json
 import struct
 import zlib
 from typing import Dict, List
+from robot import Robot
 
 MAX_DATA_SIZE = 1024 * 1024  # 최대 1MB로 제한
-HOST = "192.168.0.6" #"141.223.140.15"
-PORT = 1025
 
-def send_object_info(object_info_dict: Dict[str, List[float]]):
+def send_object_info(host: str, port: int, object_info_dict: Dict):
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(10)  # 타임아웃 설정을 10초로 변경
-            s.connect((HOST, PORT))
-            print(f"서버 {HOST}:{PORT}에 연결되었습니다.")
+            s.connect((host, port))
+            print(f"서버 {host}:{port}에 연결되었습니다.")
 
             # JSON 문자열로 변환, 인코딩 후 압축
             json_data = json.dumps(object_info_dict).encode('utf-8')
@@ -54,17 +47,21 @@ def send_object_info(object_info_dict: Dict[str, List[float]]):
         print(f"기타 오류 발생: {e}")
 
 if __name__ == "__main__":
-    object_info_dict = {
-        "object1": [0.9, 0.5, 0.5, 36.0],
-        "object2": [0.3, 0.1, 0.4, 45.0],
-        "object3": [-0.2, 0.3, 0.4, 40.0]
+    host = "192.168.0.6"
+    
+    data1 = {
+        "object1": [-8.0, 1.0, -2.0, 6.0],
+        "object2": [-1.0, 5.0, -4.0, 8.0],
+        "object3": [3.0, 4.0, 1.0, 2.0]
     }
-    print(f"원본 데이터 크기: {len(json.dumps(object_info_dict))} 바이트")
-    send_object_info(object_info_dict)
+    data2 = {
+        "object4": [7.0, -3.0, 2.0, 5.0],
+        "object5": [0.0, 2.0, -1.0, 4.0],
+        "object6": [-5.0, 3.0, 4.0, 6.0]
+    }
 
+    robot = Robot()
+    robot1, robot2 = robot.main(data1, data2)
 
-# In[ ]:
-
-
-
-
+    send_object_info(host, 1025, robot1)
+    send_object_info(host, 1026, robot2)
