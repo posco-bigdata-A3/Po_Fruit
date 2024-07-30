@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[6]:
-
 
 import json
 import subprocess
@@ -60,8 +58,6 @@ class DataProcessor:
         self.run_inverse_kinematics(object_data)
         return object_data
 
-
-# In[ ]:
 
 
 

@@ -47,7 +47,7 @@ def send_object_info(host: str, port: int, object_info_dict: Dict):
         print(f"기타 오류 발생: {e}")
 
 if __name__ == "__main__":
-    host = "192.168.0.6"
+    host = "192.168.0.6" # 해당 로봇의 컴퓨터 ip 주소
     
     data1 = {
         "object1": [-8.0, 1.0, -2.0, 6.0],

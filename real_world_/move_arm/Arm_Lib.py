@@ -10,13 +10,12 @@ class Arm_Device(object):
         self.addr = 0x15
         self.bus = smbus.SMBus(1)
 
-    # 设置总线舵机角度接口：id: 1-6(0是发6个舵机) angle: 0-180 设置舵机要运动到的角度
     #Set the bus servo angle interface: id: 1-6 (0 is to send 6 servos) angle: 0-180 Set the angle to which the servo should move
     def Arm_serial_servo_write(self, id, angle, time):
-        if id == 0:  # 此为所有舵机控制 This is the control of all servos
+        if id == 0:  #  This is the control of all servos
 
             self.Arm_serial_servo_write6(angle, angle, angle, angle, angle, angle, time)
-        elif id == 2 or id == 3 or id == 4:  # 与实际相反角度 Opposite angle to reality
+        elif id == 2 or id == 3 or id == 4:  # Opposite angle to reality
             angle = 180 - angle
             pos = int((3100 - 900) * (angle - 0) / (180 - 0) + 900)
             # pos = ((pos << 8) & 0xff00) | ((pos >> 8) & 0xff)
@@ -51,7 +50,6 @@ class Arm_Device(object):
             except:
                 print('Arm_serial_servo_write I2C error')
 
-    # 设置任意总线舵机角度接口：id: 1-250(0是群发) angle: 0-180  表示900 3100   0 - 180
     # Set any bus servo angle interface: id: 1-250 (0 is group sending) angle: 0-180 means 900 3100 0 - 180
     def Arm_serial_servo_write_any(self, id, angle, time):
         if id != 0:
@@ -64,7 +62,7 @@ class Arm_Device(object):
                 self.bus.write_i2c_block_data(self.addr, 0x19, [id & 0xff, value_H, value_L, time_H, time_L])
             except:
                 print('Arm_serial_servo_write_any I2C error')
-        elif id == 0:  # 此为所有舵机控制 This is the control of all servos
+        elif id == 0:  # This is the control of all servos
             pos = int((3100 - 900) * (angle - 0) / (180 - 0) + 900)
             # pos = ((pos << 8) & 0xff00) | ((pos >> 8) & 0xff)
             value_H = (pos >> 8) & 0xFF
@@ -76,7 +74,6 @@ class Arm_Device(object):
             except:
                 print('Arm_serial_servo_write_any I2C error')
 
-    # 一键设置总线舵机中位偏移，上电搬动到中位，然后发送下面函数，id:1-6(设置)，0（恢复初始）
     # Set the bus servo neutral offset with one key, move it to the neutral position after power-on, and then send the following function, id: 1-6 (set), 0 (restore initial)
     def Arm_serial_servo_write_offset_switch(self, id):
         try:
@@ -88,7 +85,6 @@ class Arm_Device(object):
         except:
             print('Arm_serial_servo_write_offset_switch I2C error')
 
-    # 读取一键设置总线舵机中位偏移的状态，0表示找不到对应舵机ID，1表示成功，2表示失败超出范围
     # Read the status of one-key setting of the bus servo's median offset, 0 means that the corresponding servo ID cannot be found, 1 means success, 2 means failure out of range
     def Arm_serial_servo_write_offset_state(self):
         try:
@@ -100,12 +96,11 @@ class Arm_Device(object):
             print('Arm_serial_servo_write_offset_state I2C error')
         return None
 
-    # 设置总线舵机角度接口：array
     # Set the bus servo angle interface: array
     def Arm_serial_servo_write6_array(self, joints, time):
         s1, s2, s3, s4, s5, s6 = joints[0], joints[1], joints[2], joints[3], joints[4], joints[5]
         if s1 > 180 or s2 > 180 or s3 > 180 or s4 > 180 or s5 > 270 or s6 > 180:
-            print("参数传入范围不在0-180之内！The parameter input range is not within 0-180!")
+            print("The parameter input range is not within 0-180!")
             return
         try:
             pos = int((3100 - 900) * (s1 - 0) / (180 - 0) + 900)
@@ -146,11 +141,10 @@ class Arm_Device(object):
         except:
             print('Arm_serial_servo_write6 I2C error')
 
-    # 设置总线舵机角度接口：s1~S4和s6: 0-180，S5：0~270,time是运行的时间
     # Set the bus servo angle interface: s1~S4 and s6: 0-180, S5: 0~270, time is the running time
     def Arm_serial_servo_write6(self, s1, s2, s3, s4, s5, s6, time):
         if s1 > 180 or s2 > 180 or s3 > 180 or s4 > 180 or s5 > 270 or s6 > 180:
-            print("参数传入范围不在0-180之内！The parameter input range is not within 0-180!")
+            print("The parameter input range is not within 0-180!")
             return
         try:
             pos = int((3100 - 900) * (s1 - 0) / (180 - 0) + 900)
@@ -191,7 +185,6 @@ class Arm_Device(object):
         except:
             print('Arm_serial_servo_write6 I2C error')
 
-    # 读取指定舵机角度，id: 1-6 返回0-180，读取错误返回None
     # Read the specified servo angle, id: 1-6 returns 0-180, read error returns None
     def Arm_serial_servo_read(self, id):
         if id < 1 or id > 6:
@@ -221,7 +214,6 @@ class Arm_Device(object):
         # print(pos)
         return pos
 
-    # 读取总线舵机角度，id: 1-250 返回0-180
     # Read the bus servo angle, id: 1-250 return 0-180
     def Arm_serial_servo_read_any(self, id):
         if id < 1 or id > 250:
@@ -241,7 +233,6 @@ class Arm_Device(object):
         # print(pos)
         return pos
 
-    # 读取舵机状态，正常返回0xda, 读不到数据返回0x00，其他值为舵机错误
     # Read the servo status, return 0xda normally, return 0x00 if no data is read, other values are servo error
     def Arm_ping_servo(self, id):
         data = int(id)
@@ -262,7 +253,6 @@ class Arm_Device(object):
         else:
             return None
 
-    # 读取硬件版本号
     # Read the hardware version number
     def Arm_get_hardversion(self):
         try:
@@ -276,7 +266,6 @@ class Arm_Device(object):
         # print(version)
         return version
 
-    # 扭矩开关 1：打开扭矩  0：关闭扭矩（可以掰动）
     # Torque switch 1: open torque 0: close torque (can be broken)
     def Arm_serial_set_torque(self, onoff):
         try:
@@ -287,7 +276,6 @@ class Arm_Device(object):
         except:
             print('Arm_serial_set_torque I2C error')
 
-    # 设置总线舵机的编号
     # Set the number of the bus servo
     def Arm_serial_set_id(self, id):
         try:
@@ -295,7 +283,6 @@ class Arm_Device(object):
         except:
             print('Arm_serial_set_id I2C error')
 
-    # 设置当前产品颜色 1~6，RGB灯亮对应的颜色。
     # Set the current product color 1~6, the corresponding color of the RGB light is on
     def Arm_Product_Select(self, index):
         try:
@@ -303,7 +290,6 @@ class Arm_Device(object):
         except:
             print('Arm_Product_Select I2C error')
 
-    # 设置RGB灯指定颜色
     # Set the specified color of the RGB light
     def Arm_RGB_set(self, red, green, blue):
         try:
@@ -311,7 +297,6 @@ class Arm_Device(object):
         except:
             print('Arm_RGB_set I2C error')
 
-    # 设置K1按键模式， 0：默认模式 1：学习模式
     # Set K1 key mode, 0: default mode 1: learning mode
     def Arm_Button_Mode(self, mode):
         try:
@@ -319,7 +304,6 @@ class Arm_Device(object):
         except:
             print('Arm_Button_Mode I2C error')
 
-    # 重启驱动板
     # Restart the driver board
     def Arm_reset(self):
         try:
@@ -327,7 +311,6 @@ class Arm_Device(object):
         except:
             print('Arm_reset I2C error')
 
-    # PWD舵机控制 id:1-6(0控制所有舵机) angle：0-180
     # PWD servo control id: 1-6 (0 controls all servos) angle: 0-180
     def Arm_PWM_servo_write(self, id, angle):
         try:
@@ -338,7 +321,6 @@ class Arm_Device(object):
         except:
             print('Arm_PWM_servo_write I2C error')
 
-    # 清空动作组
     # clear action group
     def Arm_Clear_Action(self):
         try:
@@ -347,7 +329,6 @@ class Arm_Device(object):
         except:
             print('Arm_Clear_Action I2C error')
 
-    # 学习模式下，记录一次当前动作
     # In learning mode, record the current action once
     def Arm_Action_Study(self):
         try:
@@ -355,7 +336,6 @@ class Arm_Device(object):
         except:
             print('Arm_Action_Study I2C error')
 
-    # 动作组运行模式  0: 停止运行 1：单次运行 2： 循环运行
     # Action group running mode 0: Stop running 1: Single running 2: Cyclic running
     def Arm_Action_Mode(self, mode):
         try:
@@ -363,7 +343,6 @@ class Arm_Device(object):
         except:
             print('Arm_Clear_Action I2C error')
 
-    # 读取已保存的动作组数量
     # Read the number of saved action groups
     def Arm_Read_Action_Num(self):
         try:
@@ -374,9 +353,7 @@ class Arm_Device(object):
         except:
             print('Arm_Read_Action_Num I2C error')
 
-    # 打开蜂鸣器，delay默认为0xff，蜂鸣器一直响。
     # Turn on the buzzer, the default delay is 0xff, and the buzzer keeps ringing
-    # delay=1~50，打开蜂鸣器后delay*100毫秒后自动关闭蜂鸣器，最大延时时间为5秒。
     # delay=1~50, the buzzer will be automatically turned off after delay*100 milliseconds after the buzzer is turned on, and the maximum delay time is 5 seconds.
     def Arm_Buzzer_On(self, delay=0xff):
         try:
@@ -385,7 +362,6 @@ class Arm_Device(object):
         except:
             print('Arm_Buzzer_On I2C error')
 
-    # 关闭蜂鸣器
     # turn off the buzzer
     def Arm_Buzzer_Off(self):
         try:
@@ -409,7 +385,7 @@ class Arm_Device(object):
                 pos = int(num)
                 value_H = (pos >> 8) & 0xFF
                 value_L = pos & 0xFF
-            elif id == 2 or id == 3 or id == 4:  # 与实际相反角度  Opposite angle to actual
+            elif id == 2 or id == 3 or id == 4:  # Opposite angle to actual
                 if num > 3100 or num < 900:
                     print("bus_servo_control error, num must be [900, 3100]")
                     return

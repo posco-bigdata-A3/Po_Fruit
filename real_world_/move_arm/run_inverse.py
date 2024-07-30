@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
-
 
 import sys
 import json
@@ -44,9 +42,6 @@ if __name__ == "__main__":
     for obj_name, obj_info in object_data_dict.items():
         object_data = ObjectData.from_dict(obj_name, obj_info)
         inverse_kinematics_and_movement(object_data)
-
-
-# In[ ]:
 
 
 
