@@ -1,0 +1,6 @@
+Gangguk: "There are 3 items in front of us. I'll choose first. I'll take the round fruit_4."
+Eunyong: "Alright. Then I'll take the round fruit_3 from position (0.4543008773192946, 0.06917889676227865, 1.319)."
+Gangguk: "Okay, I'll take the ugly fruit from position (0.9616063063830738, 0.0, 3.9410000000000003)."
+Eunyong: "Great. Now we've divided all the items."
+
+```json
